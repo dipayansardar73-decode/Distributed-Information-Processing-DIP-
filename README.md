@@ -8,10 +8,6 @@ The idea originated from an observation at **Jadavpur railway station**, where i
 
 > **Project status:** Interactive software prototype completed. Physical hardware model and field validation are under development.
 
-## Live Website
-
-[Explore the RailBlazers prototype](https://railblazers-safety.grassydog1.chatgpt.site/)
-
 ## The Problem
 
 At stations with limited or unreliable announcement infrastructure, passengers may not receive timely information about approaching trains.
