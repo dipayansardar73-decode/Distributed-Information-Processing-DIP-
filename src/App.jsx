@@ -16,13 +16,37 @@ const evidence = [
   { stat: '1,416', title: 'lives saved by RPF on platforms, tracks and trains', source: 'Press Information Bureau', href: 'https://www.pib.gov.in/PressReleaseIframePage.aspx?PRID=1919805&lang=2&reg=48' },
 ]
 
-const announcementText = 'Attention please. Namkhana Local from Sealdah is approaching Jadavpur station on platform number one. Please stand behind the safety line.'
+const announcementText = 'Attention please. The Namkhana Local, from Sealdah, is now approaching Jadavpur station, on platform number one. Please stand behind the safety line. Thank you.'
+
+const chooseAnnouncementVoice = (voices) => {
+  const englishVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith('en'))
+  const candidates = englishVoices.length ? englishVoices : voices
+
+  return [...candidates].sort((a, b) => {
+    const score = (voice) => {
+      const name = voice.name.toLowerCase()
+      const lang = voice.lang.toLowerCase()
+      let value = 0
+      if (lang === 'en-in') value += 80
+      else if (lang === 'en-gb') value += 45
+      else if (lang === 'en-us') value += 35
+      if (/natural|premium|enhanced|neural|online/.test(name)) value += 70
+      if (/neerja|rishi|veena|samantha|karen|daniel/.test(name)) value += 35
+      if (/google|microsoft/.test(name)) value += 20
+      if (/compact|espeak|festival/.test(name)) value -= 80
+      if (voice.localService) value += 5
+      return value
+    }
+    return score(b) - score(a)
+  })[0]
+}
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
   const [running, setRunning] = useState(false)
   const [speaking, setSpeaking] = useState(false)
+  const [voices, setVoices] = useState([])
   const timersRef = useRef([])
   const cleared = activeStep === detectionSteps.length
 
@@ -44,19 +68,36 @@ function App() {
     if (!('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(announcementText)
-    utterance.rate = 0.88; utterance.pitch = 0.94; utterance.volume = 1
+    const selectedVoice = chooseAnnouncementVoice(voices.length ? voices : window.speechSynthesis.getVoices())
+    if (selectedVoice) {
+      utterance.voice = selectedVoice
+      utterance.lang = selectedVoice.lang
+    } else {
+      utterance.lang = 'en-IN'
+    }
+    utterance.rate = 0.92; utterance.pitch = 1; utterance.volume = 1
     utterance.onstart = () => setSpeaking(true)
     utterance.onend = () => setSpeaking(false)
     utterance.onerror = () => setSpeaking(false)
     window.speechSynthesis.speak(utterance)
   }
   const stopAnnouncement = () => { window.speechSynthesis?.cancel(); setSpeaking(false) }
-  useEffect(() => () => { stopTimers(); window.speechSynthesis?.cancel() }, [])
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) return undefined
+    const loadVoices = () => setVoices(window.speechSynthesis.getVoices())
+    loadVoices()
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices)
+    return () => {
+      stopTimers()
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices)
+    }
+  }, [])
 
   return (
     <main>
       <header className="site-header">
-        <button className="brand" onClick={() => scrollTo('top')} aria-label="RailBlazers home"><span className="brand-mark"><TrainFront size={20} /></span><span>RailBlazers</span></button>
+        <button className="brand" onClick={() => scrollTo('top')} aria-label="RailBlazers home">RailBlazers</button>
         <button className="menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen}>Menu</button>
         <nav className={menuOpen ? 'nav open' : 'nav'} aria-label="Primary navigation">
           <button onClick={() => scrollTo('system')}>How it works</button><button onClick={() => scrollTo('demo')}>Live demo</button><button onClick={() => scrollTo('evidence')}>Evidence</button><button className="nav-cta" onClick={() => scrollTo('collaborate')}>Collaborate</button>
@@ -83,7 +124,7 @@ function App() {
         <div className="demo-heading"><div><p className="eyebrow">INTERACTIVE PROTOTYPE</p><h2>Watch the station decide.</h2></div><p>Start the sequence to simulate live sensor events. When the checks agree, the sound console becomes available.</p></div>
         <div className="demo-shell"><div className="demo-topbar"><div><span className={running ? 'pulse-dot active' : 'pulse-dot'} /> JADAVPUR APPROACH NODE</div><span>SIMULATION · NOT LIVE RAILWAY DATA</span></div><div className="demo-layout">
           <div className="timeline-panel"><div className="train-summary"><span><TrainFront /> APPROACHING</span><strong>Namkhana Local</strong><small>Sealdah → Jadavpur → Namkhana</small></div><div className="step-list">{detectionSteps.map((step, index) => { const Icon = step.icon; const done = activeStep > index; const active = running && activeStep === index; return <div className={`demo-step ${done ? 'done' : ''} ${active ? 'scanning' : ''}`} key={step.key}><div className="step-icon">{done ? <Check /> : <Icon />}</div><div><small>{step.name}</small><strong>{done ? step.status : active ? 'Checking…' : 'Waiting'}</strong><p>{step.detail}</p></div><span className="step-value">{done ? step.value : '—'}</span></div> })}</div><button className="button run-button" onClick={runSimulation} disabled={running}>{running ? <><CircleDot /> Sequence running</> : cleared ? <><RotateCcw /> Run again</> : <><Play fill="currentColor" /> Start detection</>}</button></div>
-          <div className="operations-panel"><div className="map-card"><img src="/concepts/gps-corridor.jpg" alt="Simulated route-position overview" /><div className="map-overlay"><span>ROUTE POSITION</span><strong>{activeStep >= 3 ? '1.8 km to Jadavpur' : 'Awaiting location'}</strong><div className="route-track"><i className={activeStep >= 3 ? 'located' : ''} /><span>SDAH</span><span>JDP</span></div></div></div><div className={`decision-card ${cleared ? 'cleared' : ''}`}><div className="decision-state"><span>{cleared ? <Check /> : activeStep}<b>/3</b></span><div><small>DECISION</small><strong>{cleared ? 'Announcement cleared' : running ? 'Gathering evidence' : 'Ready for sequence'}</strong></div></div><p>{cleared ? 'All three signals agree on identity, direction and approach window.' : 'The station will remain silent until at least two independent checks agree.'}</p></div><div className={`sound-console ${cleared ? 'enabled' : ''}`}><div className="speaker"><Volume2 /></div><div className="sound-copy"><small>PLATFORM ANNOUNCEMENT</small><p>“{announcementText}”</p><div className={speaking ? 'wave playing' : 'wave'}>{[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <i key={n} />)}</div></div><button aria-label={speaking ? 'Stop announcement' : 'Play announcement'} onClick={speaking ? stopAnnouncement : playAnnouncement} disabled={!cleared}>{speaking ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}</button></div><p className="audio-note">Audio uses your browser’s speech engine. Wording, train and timing are illustrative.</p></div>
+          <div className="operations-panel"><div className="map-card"><img src="/concepts/gps-corridor.jpg" alt="Simulated route-position overview" /><div className="map-overlay"><span>ROUTE POSITION</span><strong>{activeStep >= 3 ? '1.8 km to Jadavpur' : 'Awaiting location'}</strong><div className="route-track"><i className={activeStep >= 3 ? 'located' : ''} /><span>SDAH</span><span>JDP</span></div></div></div><div className={`decision-card ${cleared ? 'cleared' : ''}`}><div className="decision-state"><span>{cleared ? <Check /> : activeStep}<b>/3</b></span><div><small>DECISION</small><strong>{cleared ? 'Announcement cleared' : running ? 'Gathering evidence' : 'Ready for sequence'}</strong></div></div><p>{cleared ? 'All three signals agree on identity, direction and approach window.' : 'The station will remain silent until at least two independent checks agree.'}</p></div><div className={`sound-console ${cleared ? 'enabled' : ''}`}><div className="speaker"><Volume2 /></div><div className="sound-copy"><small>PLATFORM ANNOUNCEMENT</small><p>“{announcementText}”</p><div className={speaking ? 'wave playing' : 'wave'}>{[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <i key={n} />)}</div></div><button aria-label={speaking ? 'Stop announcement' : 'Play announcement'} onClick={speaking ? stopAnnouncement : playAnnouncement} disabled={!cleared}>{speaking ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}</button></div><p className="audio-note">Uses the most natural English or Indian-English voice available on your device. Wording, train and timing are illustrative.</p></div>
         </div></div>
       </section>
 
@@ -93,7 +134,7 @@ function App() {
 
       <section className="collaboration-section" id="collaborate"><div className="model-status"><span>PHYSICAL MODEL</span><strong>Under development</strong><p>The current release is a research-backed software simulation. Camera hardware, the proximity node and the station audio unit are being shaped for a controlled prototype.</p></div><div className="collaboration-copy"><p className="eyebrow">BUILD WITH US</p><h2>Rail safety needs engineering partners—not just an idea.</h2><p>We welcome collaboration on computer vision, embedded systems, railway operations, field research and responsible pilots.</p><div className="collaboration-actions"><a className="button primary" href="https://github.com/dipayansardar73-decode" target="_blank" rel="noreferrer"><Code2 /> Contact for collaboration</a><a className="button ghost-light" href="https://github.com/dipayansardar73-decode/Distributed-Information-Processing-DIP-" target="_blank" rel="noreferrer">Explore the code <ExternalLink /></a></div></div></section>
 
-      <footer><div className="footer-brand"><span className="brand-mark"><TrainFront /></span><div><strong>RailBlazers</strong><small>Smart Railway Monitoring & Announcement System</small></div></div><div className="prepared"><small>CONCEPT & PROTOTYPE PREPARED BY</small><strong>Dipayan Sardar</strong></div><p>Early-stage engineering concept · Inspired by Jadavpur · Not affiliated with or endorsed by Indian Railways</p></footer>
+      <footer><div className="footer-brand"><strong>RailBlazers</strong><small>Smart Railway Monitoring & Announcement System</small></div><div className="prepared"><small>CONCEPT & PROTOTYPE PREPARED BY</small><strong>Dipayan Sardar</strong></div><p>Early-stage engineering concept · Inspired by Jadavpur · Not affiliated with or endorsed by Indian Railways</p></footer>
     </main>
   )
 }
