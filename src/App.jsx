@@ -1,324 +1,99 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, Camera, Check, ExternalLink, Gauge, MapPin, Pause, Radio, ShieldCheck, TrainFront, Volume2, Wifi, X } from 'lucide-react'
-import * as THREE from 'three'
+import { useEffect, useRef, useState } from 'react'
+import {
+  ArrowDown, Camera, Check, CircleDot, Code2, ExternalLink, MapPin, Pause, Play,
+  Radio, RotateCcw, ShieldCheck, TrainFront, Volume2,
+} from 'lucide-react'
 
-const scenarios = {
-  confirmed: {
-    label: 'Confirmed approach',
-    caption: 'OCR and radio agree. GPS corroborates.',
-    signals: [
-      { id: 'ocr', label: 'OCR camera', value: '68021', detail: '96% confidence', state: 'match' },
-      { id: 'radio', label: 'Radio ID', value: '68021', detail: 'Authenticated', state: 'match' },
-      { id: 'gps', label: 'GPS fallback', value: '68021', detail: '1.8 km away', state: 'match' },
-    ],
-  },
-  obscured: {
-    label: 'Camera obscured',
-    caption: 'Radio and GPS agree. Announcement is still safe to issue.',
-    signals: [
-      { id: 'ocr', label: 'OCR camera', value: '—', detail: 'Low visibility', state: 'miss' },
-      { id: 'radio', label: 'Radio ID', value: '68021', detail: 'Authenticated', state: 'match' },
-      { id: 'gps', label: 'GPS fallback', value: '68021', detail: '1.8 km away', state: 'match' },
-    ],
-  },
-  conflict: {
-    label: 'Conflicting signal',
-    caption: 'No two sources agree. The system holds the announcement.',
-    signals: [
-      { id: 'ocr', label: 'OCR camera', value: '68021', detail: '83% confidence', state: 'warn' },
-      { id: 'radio', label: 'Radio ID', value: '68012', detail: 'Authenticated', state: 'warn' },
-      { id: 'gps', label: 'GPS fallback', value: '68047', detail: '3.4 km away', state: 'warn' },
-    ],
-  },
-}
-
-const sources = [
-  {
-    number: '01',
-    stat: '3,500+',
-    title: 'untoward cases reported in 2024',
-    copy: 'The Railway Protection Force annual edition describes deaths and injuries linked to trespass and other untoward incidents as a continuing safety challenge.',
-    link: 'https://jrrpfa.indianrailways.gov.in/assets/resource/Rail%20Sainik%202024-%20English%20Version.pdf',
-    source: 'Rail Sainik 2024 · RPF',
-  },
-  {
-    number: '02',
-    stat: '261 / 60',
-    title: 'PA vs train-display coverage',
-    copy: 'A 2024 Parliamentary answer for South Western Railway listed PA systems at 261 stations, but train display boards at only 60—evidence of uneven passenger-information infrastructure.',
-    link: 'https://sansad.in/getFile/annex/263/AU938.pdf?source=pqars',
-    source: 'Rajya Sabha AU 938 · 2024',
-  },
-  {
-    number: '03',
-    stat: '1,416',
-    title: 'lives saved by RPF in one year',
-    copy: 'Under Operation Jeevan Raksha, RPF reported saving 873 men and 543 women on platforms, tracks and trains during FY 2022–23.',
-    link: 'https://www.pib.gov.in/PressReleaseIframePage.aspx?PRID=1919805&lang=2&reg=48',
-    source: 'Press Information Bureau · 2023',
-  },
+const detectionSteps = [
+  { key: 'vision', icon: Camera, name: 'Vision checkpoint', status: 'Front marker read', value: 'ID 68021 · 96%', detail: 'The camera isolates the train marker and converts it into a machine-readable identity.' },
+  { key: 'proximity', icon: Radio, name: 'Secure proximity ID', status: 'Identity authenticated', value: 'ID 68021 · MATCH', detail: 'A short-range onboard beacon confirms the same identity inside the station approach zone.' },
+  { key: 'location', icon: MapPin, name: 'Route position', status: 'Direction confirmed', value: '1.8 KM · SOUTHBOUND', detail: 'Location verifies that the train is moving toward Jadavpur—not merely nearby.' },
 ]
 
-function TrackScene() {
-  const mountRef = useRef(null)
+const evidence = [
+  { stat: '3,500+', title: 'untoward cases reported in 2024', source: 'Railway Protection Force', href: 'https://jrrpfa.indianrailways.gov.in/assets/resource/Rail%20Sainik%202024-%20English%20Version.pdf' },
+  { stat: '261 / 60', title: 'PA systems vs train-display boards in one railway zone', source: 'Rajya Sabha answer, 2024', href: 'https://sansad.in/getFile/annex/263/AU938.pdf?source=pqars' },
+  { stat: '1,416', title: 'lives saved by RPF on platforms, tracks and trains', source: 'Press Information Bureau', href: 'https://www.pib.gov.in/PressReleaseIframePage.aspx?PRID=1919805&lang=2&reg=48' },
+]
 
-  useEffect(() => {
-    const mount = mountRef.current
-    const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
-    camera.position.set(0, 4.2, 8)
-    camera.lookAt(0, 0, -3)
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    mount.appendChild(renderer.domElement)
-
-    const amber = new THREE.LineBasicMaterial({ color: 0xffb000 })
-    const muted = new THREE.LineBasicMaterial({ color: 0x45505a, transparent: true, opacity: 0.75 })
-    const makeLine = (points, material) => {
-      const geometry = new THREE.BufferGeometry().setFromPoints(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)))
-      const line = new THREE.Line(geometry, material)
-      scene.add(line)
-      return line
-    }
-    makeLine([[-1.7, 0, 3], [-0.55, 0, -11]], amber)
-    makeLine([[1.7, 0, 3], [0.55, 0, -11]], amber)
-    for (let z = 2.8; z > -11; z -= 0.72) {
-      const width = 1.68 - (2.8 - z) * 0.08
-      makeLine([[-Math.max(width, .58), 0, z], [Math.max(width, .58), 0, z]], muted)
-    }
-    const beaconGeo = new THREE.SphereGeometry(0.09, 16, 16)
-    const beaconMat = new THREE.MeshBasicMaterial({ color: 0xffb000 })
-    const beacon = new THREE.Mesh(beaconGeo, beaconMat)
-    beacon.position.set(0, 0.12, -2)
-    scene.add(beacon)
-
-    let frame
-    const resize = () => {
-      const { clientWidth, clientHeight } = mount
-      renderer.setSize(clientWidth, clientHeight, false)
-      camera.aspect = clientWidth / clientHeight
-      camera.updateProjectionMatrix()
-    }
-    const animate = (time) => {
-      beacon.position.z = 1.8 - ((time * 0.0014) % 1) * 9.8
-      const scale = 0.8 + Math.sin(time * 0.006) * 0.25
-      beacon.scale.setScalar(scale)
-      renderer.render(scene, camera)
-      frame = requestAnimationFrame(animate)
-    }
-    resize()
-    animate(0)
-    window.addEventListener('resize', resize)
-    return () => {
-      cancelAnimationFrame(frame)
-      window.removeEventListener('resize', resize)
-      renderer.dispose()
-      mount.removeChild(renderer.domElement)
-    }
-  }, [])
-
-  return <div ref={mountRef} className="track-scene" aria-hidden="true" />
-}
+const announcementText = 'Attention please. Namkhana Local from Sealdah is approaching Jadavpur station on platform number one. Please stand behind the safety line.'
 
 function App() {
-  const [scenario, setScenario] = useState('confirmed')
   const [menuOpen, setMenuOpen] = useState(false)
-  const current = scenarios[scenario]
-  const matches = current.signals.filter((signal) => signal.state === 'match').length
-  const approved = matches >= 2
-  const confidence = useMemo(() => (scenario === 'confirmed' ? 98 : scenario === 'obscured' ? 91 : 38), [scenario])
+  const [activeStep, setActiveStep] = useState(0)
+  const [running, setRunning] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
+  const timersRef = useRef([])
+  const cleared = activeStep === detectionSteps.length
 
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
     setMenuOpen(false)
   }
+  const stopTimers = () => { timersRef.current.forEach(clearTimeout); timersRef.current = [] }
+  const runSimulation = () => {
+    stopTimers(); window.speechSynthesis?.cancel(); setSpeaking(false); setActiveStep(0); setRunning(true)
+    detectionSteps.forEach((_, index) => {
+      timersRef.current.push(setTimeout(() => {
+        setActiveStep(index + 1)
+        if (index === detectionSteps.length - 1) setRunning(false)
+      }, 850 * (index + 1)))
+    })
+  }
+  const playAnnouncement = () => {
+    if (!('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(announcementText)
+    utterance.rate = 0.88; utterance.pitch = 0.94; utterance.volume = 1
+    utterance.onstart = () => setSpeaking(true)
+    utterance.onend = () => setSpeaking(false)
+    utterance.onerror = () => setSpeaking(false)
+    window.speechSynthesis.speak(utterance)
+  }
+  const stopAnnouncement = () => { window.speechSynthesis?.cancel(); setSpeaking(false) }
+  useEffect(() => () => { stopTimers(); window.speechSynthesis?.cancel() }, [])
 
   return (
     <main>
       <header className="site-header">
-        <button className="brand" onClick={() => scrollTo('top')} aria-label="RailBlazers home">
-          <span className="brand-mark"><TrainFront size={18} /></span>
-          <span>RAILBLAZERS</span>
-        </button>
+        <button className="brand" onClick={() => scrollTo('top')} aria-label="RailBlazers home"><span className="brand-mark"><TrainFront size={20} /></span><span>RailBlazers</span></button>
         <button className="menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen}>Menu</button>
         <nav className={menuOpen ? 'nav open' : 'nav'} aria-label="Primary navigation">
-          <button onClick={() => scrollTo('system')}>The system</button>
-          <button onClick={() => scrollTo('evidence')}>Evidence</button>
-          <button onClick={() => scrollTo('roadmap')}>Roadmap</button>
-          <a className="repo-link" href="https://github.com/dipayansardar73-decode/Distributed-Information-Processing-DIP-" target="_blank" rel="noreferrer">View source <ExternalLink size={14} /></a>
+          <button onClick={() => scrollTo('system')}>How it works</button><button onClick={() => scrollTo('demo')}>Live demo</button><button onClick={() => scrollTo('evidence')}>Evidence</button><button className="nav-cta" onClick={() => scrollTo('collaborate')}>Collaborate</button>
         </nav>
       </header>
 
       <section className="hero" id="top">
-        <TrackScene />
-        <div className="hero-copy">
-          <div className="eyebrow"><span /> A resilient station-safety concept</div>
-          <h1>See the train.<br />Verify the signal.<br /><em>Warn the station.</em></h1>
-          <p className="hero-lede">A low-cost approach to automatic train announcements for stations where silence, delayed information and track crossing can turn an ordinary journey into a risk.</p>
-          <div className="hero-actions">
-            <button className="primary-button" onClick={() => scrollTo('demo')}>Run the signal demo</button>
-            <button className="text-button" onClick={() => scrollTo('story')}>Read the origin story <ArrowDown size={16} /></button>
-          </div>
-        </div>
-        <div className="hero-status" aria-label="System status preview">
-          <div className="status-kicker">APPROACHING · SIMULATION</div>
-          <div className="train-number">68021</div>
-          <div className="route-line"><span>SDAH</span><i /><span>JDP</span></div>
-          <div className="arrival"><span>ARRIVAL WINDOW</span><strong>02:14</strong></div>
-          <div className="verified"><ShieldCheck size={17} /> 3 / 3 signals aligned</div>
-        </div>
+        <img className="hero-image" src="/concepts/ocr-approach.jpg" alt="Concept view of a trackside camera identifying an approaching suburban train" />
+        <div className="hero-shade" />
+        <div className="hero-copy"><span className="kicker"><i /> Resilient station intelligence</span><h1>Know the train.<br />Confirm the approach.<br /><em>Alert the platform.</em></h1><p>RailBlazers turns three independent observations into one trustworthy passenger announcement—designed for stations where timely information cannot be taken for granted.</p><div className="hero-actions"><button className="button primary" onClick={() => { scrollTo('demo'); setTimeout(runSimulation, 600) }}><Play size={17} fill="currentColor" /> Run the live sequence</button><button className="button ghost" onClick={() => scrollTo('system')}>Explore the system <ArrowDown size={17} /></button></div></div>
+        <div className="hero-readout"><span className="live-dot" /><div><small>DEMO APPROACH</small><strong>SDAH → JDP</strong></div><div className="readout-rule" /><div><small>ESTIMATED ARRIVAL</small><strong>02:14</strong></div></div>
       </section>
 
-      <div className="signal-strip" aria-label="System promise">
-        <span>CAMERA</span><i /> <span>RADIO ID</span><i /> <span>GPS</span><b>→</b><strong>AUTOMATIC ANNOUNCEMENT</strong>
-      </div>
-
-      <section className="story-section" id="story">
-        <div className="section-label">01 / THE OBSERVATION</div>
-        <div className="story-grid">
-          <div>
-            <p className="quote-mark">“</p>
-            <h2>At Jadavpur station, the absence of a dependable announcement became impossible to ignore.</h2>
-          </div>
-          <div className="story-body">
-            <p>Passengers were making decisions without knowing what was approaching. Some crossed the tracks. The insight was simple: a station should not need a full control room to deliver one timely, trustworthy warning.</p>
-            <p className="note">This observation is the project’s origin story, not a claim that every station in the area lacks passenger information today.</p>
-          </div>
-        </div>
-      </section>
+      <section className="origin-section"><div className="origin-label">THE STARTING POINT</div><div><h2>At Jadavpur, a quiet platform revealed an information gap.</h2><p>When passengers do not know which train is approaching, they make decisions with incomplete information. RailBlazers began with a practical question: can a station recognize an incoming train, verify it twice, and speak before uncertainty becomes risk?</p></div><aside><ShieldCheck /><p>This is the project’s founding observation. The proposed system must still be validated through an authorised field pilot.</p></aside></section>
 
       <section className="system-section" id="system">
-        <div className="section-heading">
-          <div className="section-label">02 / THE SYSTEM</div>
-          <h2>Three signals. One decision.</h2>
-          <p>Each input can fail differently. The station announces only when at least two independent sources agree on the same train identity.</p>
-        </div>
-        <div className="system-grid">
-          <article className="system-card camera-card">
-            <span className="card-index">01</span><Camera />
-            <h3>Trackside vision</h3>
-            <p>A rugged camera captures the locomotive or coach identifier. Computer vision isolates the number; OCR turns it into a train ID.</p>
-            <div className="card-meta">PRIMARY · NO TRAIN MODIFICATION</div>
-          </article>
-          <article className="system-card radio-card">
-            <span className="card-index">02</span><Wifi />
-            <h3>Short-range radio</h3>
-            <p>An authenticated onboard tag announces its identity to the station receiver only after entering a defined approach zone.</p>
-            <div className="card-meta">PRIMARY · PROXIMITY CONFIRMATION</div>
-          </article>
-          <article className="system-card gps-card">
-            <span className="card-index">03</span><MapPin />
-            <h3>Location fallback</h3>
-            <p>GPS or an operations feed checks route, direction and proximity when one local signal is unavailable or uncertain.</p>
-            <div className="card-meta">FALLBACK · CONTEXT SIGNAL</div>
-          </article>
-          <article className="decision-card">
-            <div className="decision-symbol">2<span>/3</span></div>
-            <div><h3>Quorum before voice</h3><p>Match train ID, direction and time window—then trigger a multilingual, pre-recorded station announcement.</p></div>
-          </article>
-        </div>
+        <div className="section-intro"><span className="section-number">01</span><div><p className="eyebrow">HOW IT WORKS</p><h2>Three views of the same arrival.</h2></div><p className="intro-copy">No single sensor is trusted on its own. Local vision, a secure proximity identity and route position arrive separately—then meet at the station.</p></div>
+        <article className="feature feature-wide"><div className="feature-image"><img src="/concepts/ocr-approach.jpg" alt="Concept camera reading the front marker of an approaching train" /><span>CONCEPT VISUAL · CAMERA + OCR</span></div><div className="feature-copy"><span className="step-pill">CHECK 01</span><Camera /><h3>Read what arrives.</h3><p>A weather-protected camera watches the approach. The vision model locates the front marker, extracts the identifier and compares it with the expected train list.</p><ul><li>Frame capture at the approach point</li><li>Train-marker isolation and OCR</li><li>Confidence score with audit frame</li></ul></div></article>
+        <div className="feature-pair"><article className="feature compact"><div className="feature-image"><img src="/concepts/proximity-radio.jpg" alt="Concept showing a secure short-range identity link between train and station receiver" /><span>CONCEPT VISUAL · PROXIMITY ID</span></div><div className="feature-copy"><span className="step-pill">CHECK 02</span><Radio /><h3>Confirm identity nearby.</h3><p>An authenticated onboard beacon responds only within the approach zone. The station receives the train identity without depending on a public network.</p></div></article><article className="feature compact"><div className="feature-image"><img src="/concepts/gps-corridor.jpg" alt="Concept aerial view of a railway route with location verification" /><span>CONCEPT VISUAL · ROUTE POSITION</span></div><div className="feature-copy"><span className="step-pill">CHECK 03</span><MapPin /><h3>Verify direction and distance.</h3><p>Location acts as context and fallback. It answers the final operational question: is this train actually moving toward this platform now?</p></div></article></div>
+        <div className="quorum-banner"><span>2 OF 3</span><div><h3>Agreement before announcement</h3><p>Two matching identities clear the public message. A conflict stays silent and asks for human verification.</p></div><ShieldCheck /></div>
       </section>
 
       <section className="demo-section" id="demo">
-        <div className="section-heading light">
-          <div className="section-label">03 / LIVE LOGIC DEMO</div>
-          <h2>What should the station say?</h2>
-          <p>Switch conditions to see how the same 2-of-3 decision rule behaves when a signal is lost or conflicts.</p>
-        </div>
-        <div className="scenario-tabs" role="tablist" aria-label="Detection scenarios">
-          {Object.entries(scenarios).map(([key, value]) => (
-            <button key={key} className={scenario === key ? 'active' : ''} onClick={() => setScenario(key)} role="tab" aria-selected={scenario === key}>{value.label}</button>
-          ))}
-        </div>
-        <div className="console">
-          <div className="console-topbar"><span>JADAVPUR APPROACH NODE · SOUTHBOUND</span><span>SIMULATION / 14:32:08</span></div>
-          <div className="console-body">
-            <div className="signal-list">
-              {current.signals.map((signal) => {
-                const Icon = signal.id === 'ocr' ? Camera : signal.id === 'radio' ? Radio : MapPin
-                return (
-                  <div className={`signal-row ${signal.state}`} key={signal.id}>
-                    <div className="signal-icon"><Icon size={20} /></div>
-                    <div><span>{signal.label}</span><strong>{signal.value}</strong></div>
-                    <small>{signal.detail}</small>
-                    <div className="signal-state">{signal.state === 'match' ? <Check size={18} /> : signal.state === 'miss' ? <X size={18} /> : <Gauge size={18} />}</div>
-                  </div>
-                )
-              })}
-            </div>
-            <div className={`decision-panel ${approved ? 'go' : 'hold'}`}>
-              <div className="decision-ring"><strong>{confidence}</strong><span>%</span></div>
-              <span className="decision-label">DECISION CONFIDENCE</span>
-              <h3>{approved ? 'ANNOUNCEMENT CLEARED' : 'ANNOUNCEMENT HELD'}</h3>
-              <p>{current.caption}</p>
-              <div className="announcement-box">
-                {approved ? <Volume2 size={21} /> : <Pause size={21} />}
-                <span>{approved ? '“Attention please. Train 68021 is approaching Jadavpur platform one.”' : 'No public message. Notify the station operator for verification.'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p className="demo-disclaimer">Illustrative interface only. Train number, confidence and arrival time are simulated—not live railway data.</p>
+        <div className="demo-heading"><div><p className="eyebrow">INTERACTIVE PROTOTYPE</p><h2>Watch the station decide.</h2></div><p>Start the sequence to simulate live sensor events. When the checks agree, the sound console becomes available.</p></div>
+        <div className="demo-shell"><div className="demo-topbar"><div><span className={running ? 'pulse-dot active' : 'pulse-dot'} /> JADAVPUR APPROACH NODE</div><span>SIMULATION · NOT LIVE RAILWAY DATA</span></div><div className="demo-layout">
+          <div className="timeline-panel"><div className="train-summary"><span><TrainFront /> APPROACHING</span><strong>Namkhana Local</strong><small>Sealdah → Jadavpur → Namkhana</small></div><div className="step-list">{detectionSteps.map((step, index) => { const Icon = step.icon; const done = activeStep > index; const active = running && activeStep === index; return <div className={`demo-step ${done ? 'done' : ''} ${active ? 'scanning' : ''}`} key={step.key}><div className="step-icon">{done ? <Check /> : <Icon />}</div><div><small>{step.name}</small><strong>{done ? step.status : active ? 'Checking…' : 'Waiting'}</strong><p>{step.detail}</p></div><span className="step-value">{done ? step.value : '—'}</span></div> })}</div><button className="button run-button" onClick={runSimulation} disabled={running}>{running ? <><CircleDot /> Sequence running</> : cleared ? <><RotateCcw /> Run again</> : <><Play fill="currentColor" /> Start detection</>}</button></div>
+          <div className="operations-panel"><div className="map-card"><img src="/concepts/gps-corridor.jpg" alt="Simulated route-position overview" /><div className="map-overlay"><span>ROUTE POSITION</span><strong>{activeStep >= 3 ? '1.8 km to Jadavpur' : 'Awaiting location'}</strong><div className="route-track"><i className={activeStep >= 3 ? 'located' : ''} /><span>SDAH</span><span>JDP</span></div></div></div><div className={`decision-card ${cleared ? 'cleared' : ''}`}><div className="decision-state"><span>{cleared ? <Check /> : activeStep}<b>/3</b></span><div><small>DECISION</small><strong>{cleared ? 'Announcement cleared' : running ? 'Gathering evidence' : 'Ready for sequence'}</strong></div></div><p>{cleared ? 'All three signals agree on identity, direction and approach window.' : 'The station will remain silent until at least two independent checks agree.'}</p></div><div className={`sound-console ${cleared ? 'enabled' : ''}`}><div className="speaker"><Volume2 /></div><div className="sound-copy"><small>PLATFORM ANNOUNCEMENT</small><p>“{announcementText}”</p><div className={speaking ? 'wave playing' : 'wave'}>{[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <i key={n} />)}</div></div><button aria-label={speaking ? 'Stop announcement' : 'Play announcement'} onClick={speaking ? stopAnnouncement : playAnnouncement} disabled={!cleared}>{speaking ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}</button></div><p className="audio-note">Audio uses your browser’s speech engine. Wording, train and timing are illustrative.</p></div>
+        </div></div>
       </section>
 
-      <section className="evidence-section" id="evidence">
-        <div className="section-heading">
-          <div className="section-label">04 / PROBLEM VALIDATION</div>
-          <h2>The need is real.<br />The exact gap needs a pilot.</h2>
-          <p>Public evidence validates the safety problem and the component technologies. It does not yet prove that this exact three-signal system is the right operational answer at every station.</p>
-        </div>
-        <div className="evidence-grid">
-          {sources.map((item) => (
-            <a className="evidence-card" href={item.link} target="_blank" rel="noreferrer" key={item.number}>
-              <div className="evidence-number">{item.number}</div>
-              <strong className="big-stat">{item.stat}</strong>
-              <h3>{item.title}</h3>
-              <p>{item.copy}</p>
-              <span>{item.source} <ExternalLink size={14} /></span>
-            </a>
-          ))}
-        </div>
-        <div className="validation-row">
-          <div><Check /><h3>Validated</h3><p>Trespass and platform/track incidents are material safety problems. PA infrastructure exists, but station information coverage is uneven.</p></div>
-          <div><Check /><h3>Technically plausible</h3><p>Indian Railways already specifies networked passenger-information systems and uses fixed RFID readers to identify passing rolling stock.</p></div>
-          <div><Gauge /><h3>Still to prove</h3><p>OCR accuracy in rain, dust, night and speed; radio-tag retrofit economics; false-alarm rate; and the real effect on unsafe crossing behaviour.</p></div>
-        </div>
-      </section>
+      <section className="evidence-section" id="evidence"><div className="section-intro evidence-intro"><span className="section-number">02</span><div><p className="eyebrow">PROBLEM VALIDATION</p><h2>The need is documented.<br />The solution needs a pilot.</h2></div><p className="intro-copy">Public sources establish a meaningful safety problem and show that the underlying identification and announcement technologies are credible. They do not replace field testing.</p></div><div className="evidence-grid">{evidence.map((item) => <a href={item.href} target="_blank" rel="noreferrer" key={item.stat}><strong>{item.stat}</strong><h3>{item.title}</h3><span>{item.source} <ExternalLink size={15} /></span></a>)}</div><div className="evidence-note"><ShieldCheck /><div><h3>What still has to be proven</h3><p>Night and rain accuracy, safe false-positive limits, radio retrofit economics, data governance, operator workflow and measurable passenger-safety impact.</p></div></div></section>
 
-      <section className="feasibility-section">
-        <div className="section-label">05 / WHY THIS CAN FIT</div>
-        <div className="feasibility-grid">
-          <div className="sticky-copy"><h2>Build beside the railway—not against it.</h2><p>The strongest route is not a parallel railway network. It is an edge layer that produces a verified event for systems stations already understand: announcements and displays.</p></div>
-          <div className="feasibility-list">
-            <a href="https://rdso.indianrailways.gov.in/uploads/2025-02-27-RDSO_SPN_TC_108_2025%20Ver-2d0.pdf" target="_blank" rel="noreferrer"><span>01</span><div><h3>Compatible output</h3><p>RDSO’s IP-based passenger-information specification already combines central control, remote monitoring, displays and PC-based announcements.</p></div><ExternalLink /></a>
-            <a href="https://rfid.indianrailways.gov.in/" target="_blank" rel="noreferrer"><span>02</span><div><h3>Proven identification pattern</h3><p>Indian Railways’ RFID portal describes fixed readers beside tracks receiving identity and location information from passing tags.</p></div><ExternalLink /></a>
-            <a href="https://doi.org/10.1057/jit.2009.9" target="_blank" rel="noreferrer"><span>03</span><div><h3>Multiple sensing options</h3><p>A CRIS-linked case study evaluated RFID, GPS and OCR as alternative railcar-tracking technologies—the same diversity this concept turns into redundancy.</p></div><ExternalLink /></a>
-          </div>
-        </div>
-      </section>
+      <section className="roadmap-section"><div><p className="eyebrow">FROM WEBSITE TO FIELD MODEL</p><h2>A practical path to a working prototype.</h2></div><ol><li><span>01</span><div><h3>Observe</h3><p>Survey the station, crossing behaviour and current announcement flow.</p></div></li><li><span>02</span><div><h3>Detect</h3><p>Train the camera pipeline on authorised approach footage.</p></div></li><li><span>03</span><div><h3>Verify</h3><p>Add the second signal and test disagreement handling in shadow mode.</p></div></li><li><span>04</span><div><h3>Announce</h3><p>Run supervised messages and measure reliability and response.</p></div></li></ol></section>
 
-      <section className="roadmap-section" id="roadmap">
-        <div className="section-heading light">
-          <div className="section-label">06 / PILOT ROADMAP</div>
-          <h2>Start with evidence,<br />not infrastructure.</h2>
-        </div>
-        <div className="roadmap-grid">
-          <article><span>PHASE 01 · 4 WEEKS</span><h3>Observe</h3><p>Map crossing behaviour, announcement gaps, train speeds, visibility and current station workflows. Establish a safety baseline.</p><b>OUTPUT</b><small>Site survey + risk map</small></article>
-          <article><span>PHASE 02 · 8 WEEKS</span><h3>Detect</h3><p>Run a shadow-mode camera node. Compare detected train IDs and arrival windows against authorised operational records.</p><b>OUTPUT</b><small>Accuracy + failure dataset</small></article>
-          <article><span>PHASE 03 · 12 WEEKS</span><h3>Verify</h3><p>Add a second independent signal. Test quorum logic without public announcements and log every disagreement.</p><b>OUTPUT</b><small>Safety case + operator review</small></article>
-          <article><span>PHASE 04 · CONTROLLED</span><h3>Announce</h3><p>Enable supervised, multilingual messages during selected windows. Measure alert timeliness, false alarms and passenger response.</p><b>OUTPUT</b><small>Pilot decision memo</small></article>
-        </div>
-      </section>
+      <section className="collaboration-section" id="collaborate"><div className="model-status"><span>PHYSICAL MODEL</span><strong>Under development</strong><p>The current release is a research-backed software simulation. Camera hardware, the proximity node and the station audio unit are being shaped for a controlled prototype.</p></div><div className="collaboration-copy"><p className="eyebrow">BUILD WITH US</p><h2>Rail safety needs engineering partners—not just an idea.</h2><p>We welcome collaboration on computer vision, embedded systems, railway operations, field research and responsible pilots.</p><div className="collaboration-actions"><a className="button primary" href="https://github.com/dipayansardar73-decode" target="_blank" rel="noreferrer"><Code2 /> Contact for collaboration</a><a className="button ghost-light" href="https://github.com/dipayansardar73-decode/Distributed-Information-Processing-DIP-" target="_blank" rel="noreferrer">Explore the code <ExternalLink /></a></div></div></section>
 
-      <section className="principles-section">
-        <div className="section-label">DESIGN PRINCIPLES</div>
-        <div className="principles-grid"><span>Local-first processing</span><span>Fail silent, never guess</span><span>Privacy by design</span><span>Human override always</span><span>Audit every decision</span><span>Multilingual by default</span></div>
-      </section>
-
-      <footer>
-        <div><span className="footer-mark"><TrainFront /></span><h2>A safer platform starts<br />before the train arrives.</h2></div>
-        <div className="footer-meta"><p>RailBlazers is an early-stage engineering concept for resilient station announcements. It is not affiliated with or endorsed by Indian Railways.</p><a href="https://github.com/dipayansardar73-decode/Distributed-Information-Processing-DIP-" target="_blank" rel="noreferrer">Explore the repository <ExternalLink size={15} /></a><span>Concept initiated in Delhi · Inspired by Jadavpur</span></div>
-      </footer>
+      <footer><div className="footer-brand"><span className="brand-mark"><TrainFront /></span><div><strong>RailBlazers</strong><small>Smart Railway Monitoring & Announcement System</small></div></div><div className="prepared"><small>CONCEPT & PROTOTYPE PREPARED BY</small><strong>Dipayan Sardar</strong></div><p>Early-stage engineering concept · Inspired by Jadavpur · Not affiliated with or endorsed by Indian Railways</p></footer>
     </main>
   )
 }

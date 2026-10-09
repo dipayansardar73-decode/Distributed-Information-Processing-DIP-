@@ -10,7 +10,9 @@ RailBlazers combines three independent signals:
 2. short-range authenticated radio ID, and
 3. GPS / operations-feed fallback.
 
-The station announces a train only when at least two sources agree on the same identity. The website includes an interactive simulation of confirmed, degraded, and conflicting conditions.
+The station announces a train only when at least two sources agree on the same identity. The website includes a timed sensor simulation, route-position view and a browser-generated audible platform announcement.
+
+The current release is a research-backed software prototype. The camera, proximity receiver and physical announcement unit are still under development.
 
 ## Run locally
 
@@ -28,7 +30,7 @@ npm start
 
 ## Stack
 
-React, Vite, Tailwind CSS, Three.js, Lucide icons, and a small Express production server.
+React, Vite, Tailwind CSS, browser Speech Synthesis, Lucide icons, and a small Express production server.
 
 ## Important
 
