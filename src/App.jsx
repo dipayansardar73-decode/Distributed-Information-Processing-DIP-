@@ -163,7 +163,7 @@ function App() {
         <div className="hero-status" aria-label="System status preview">
           <div className="status-kicker">APPROACHING · SIMULATION</div>
           <div className="train-number">68021</div>
-          <div className="route-line"><span>KGP</span><i /><span>JGM</span></div>
+          <div className="route-line"><span>SDAH</span><i /><span>JDP</span></div>
           <div className="arrival"><span>ARRIVAL WINDOW</span><strong>02:14</strong></div>
           <div className="verified"><ShieldCheck size={17} /> 3 / 3 signals aligned</div>
         </div>
@@ -178,7 +178,7 @@ function App() {
         <div className="story-grid">
           <div>
             <p className="quote-mark">“</p>
-            <h2>At a small station near Jhargram, the absence of a dependable announcement became impossible to ignore.</h2>
+            <h2>At Jadavpur station, the absence of a dependable announcement became impossible to ignore.</h2>
           </div>
           <div className="story-body">
             <p>Passengers were making decisions without knowing what was approaching. Some crossed the tracks. The insight was simple: a station should not need a full control room to deliver one timely, trustworthy warning.</p>
@@ -231,7 +231,7 @@ function App() {
           ))}
         </div>
         <div className="console">
-          <div className="console-topbar"><span>JHARGRAM APPROACH NODE · EASTBOUND</span><span>SIMULATION / 14:32:08</span></div>
+          <div className="console-topbar"><span>JADAVPUR APPROACH NODE · SOUTHBOUND</span><span>SIMULATION / 14:32:08</span></div>
           <div className="console-body">
             <div className="signal-list">
               {current.signals.map((signal) => {
@@ -253,7 +253,7 @@ function App() {
               <p>{current.caption}</p>
               <div className="announcement-box">
                 {approved ? <Volume2 size={21} /> : <Pause size={21} />}
-                <span>{approved ? '“Attention please. Train 68021 to Jhargram is approaching platform one.”' : 'No public message. Notify the station operator for verification.'}</span>
+                <span>{approved ? '“Attention please. Train 68021 is approaching Jadavpur platform one.”' : 'No public message. Notify the station operator for verification.'}</span>
               </div>
             </div>
           </div>
@@ -317,7 +317,7 @@ function App() {
 
       <footer>
         <div><span className="footer-mark"><TrainFront /></span><h2>A safer platform starts<br />before the train arrives.</h2></div>
-        <div className="footer-meta"><p>RailBlazers is an early-stage engineering concept for resilient station announcements. It is not affiliated with or endorsed by Indian Railways.</p><a href="https://github.com/dipayansardar73-decode/Distributed-Information-Processing-DIP-" target="_blank" rel="noreferrer">Explore the repository <ExternalLink size={15} /></a><span>Concept initiated in Delhi · Inspired by Jhargram</span></div>
+        <div className="footer-meta"><p>RailBlazers is an early-stage engineering concept for resilient station announcements. It is not affiliated with or endorsed by Indian Railways.</p><a href="https://github.com/dipayansardar73-decode/Distributed-Information-Processing-DIP-" target="_blank" rel="noreferrer">Explore the repository <ExternalLink size={15} /></a><span>Concept initiated in Delhi · Inspired by Jadavpur</span></div>
       </footer>
     </main>
   )
